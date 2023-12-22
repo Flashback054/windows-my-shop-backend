@@ -28,12 +28,11 @@ const userSchema = new mongoose.Schema(
 		},
 		image: {
 			type: String,
-			default:
-				"https://res.cloudinary.com/dnvgbbddv/image/upload/v1703240642/windows-my-shop/User/default.jpg",
+			default: process.env.CLOUDINARY_USER_DEFAULT_IMAGE || "default.jpg",
 		},
 		imagePublicId: {
 			type: String,
-			default: "windows-my-shop/User/default.jpg",
+			default: process.env.CLOUDINARY_USER_DEFAULT_IMAGE_PUBLIC_ID,
 		},
 		phone: {
 			type: String,
