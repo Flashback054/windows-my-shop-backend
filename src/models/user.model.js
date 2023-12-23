@@ -33,6 +33,7 @@ const userSchema = new mongoose.Schema(
 		imagePublicId: {
 			type: String,
 			default: process.env.CLOUDINARY_USER_DEFAULT_IMAGE_PUBLIC_ID,
+			select: false,
 		},
 		phone: {
 			type: String,

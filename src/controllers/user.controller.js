@@ -84,7 +84,9 @@ exports.updateMe = async (req, res, next) => {
 		}
 
 		// Update user document
-		const oldUser = await User.findById(req.user.id).lean();
+		const oldUser = await User.findById(req.user.id)
+			.select("+imagePublicId")
+			.lean({ virtuals: true });
 
 		const updatedUser = await User.findByIdAndUpdate(req.user.id, req.body, {
 			new: true,
@@ -92,7 +94,11 @@ exports.updateMe = async (req, res, next) => {
 		});
 
 		// Delete old image
-		if (oldUser?.image && oldUser.image !== updatedUser.image) {
+		if (
+			oldUser?.image &&
+			oldUser.image !== updatedUser.image &&
+			!(oldUser.image.search("default") !== -1) // prevent deleting default image
+		) {
 			// Use cloudinary to delete old image
 			try {
 				await cloudinary.uploader.destroy(oldUser.imagePublicId);

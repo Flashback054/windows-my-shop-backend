@@ -107,7 +107,9 @@ exports.getOne = (Model, options) => async (req, res, next) => {
 };
 
 exports.updateOne = (Model, options) => async (req, res, next) => {
-	const oldDoc = await Model.findById(req.params.id).lean({ virtuals: true });
+	const oldDoc = await Model.findById(req.params.id)
+		.select("+imagePublicId")
+		.lean({ virtuals: true });
 
 	const updatedDoc = await Model.findByIdAndUpdate(req.params.id, req.body, {
 		new: true,
@@ -146,7 +148,9 @@ exports.updateOne = (Model, options) => async (req, res, next) => {
 };
 
 exports.deleteOne = (Model) => async (req, res, next) => {
-	const doc = await Model.findOneAndDelete({ _id: req.params.id });
+	const doc = await Model.findOneAndDelete({ _id: req.params.id }).select(
+		"+imagePublicId"
+	);
 
 	if (!doc) {
 		throw new AppError(
