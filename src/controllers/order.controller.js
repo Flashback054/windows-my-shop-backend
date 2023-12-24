@@ -9,7 +9,7 @@ const User = require("../models/user.model");
 exports.getAllOrders = ControllerFactory.getAll(Order, {
 	populate: [
 		{
-			path: "orderItems.bookId",
+			path: "orderDetails.bookId",
 			select: "name image",
 		},
 		{
@@ -22,7 +22,7 @@ exports.getAllOrders = ControllerFactory.getAll(Order, {
 exports.getOrder = ControllerFactory.getOne(Order, {
 	populate: [
 		{
-			path: "orderItems.bookId",
+			path: "orderDetails.bookId",
 			select: "name image",
 		},
 		{
@@ -33,8 +33,8 @@ exports.getOrder = ControllerFactory.getOne(Order, {
 });
 exports.createOrder = async (req, res, next) => {
 	// Get user from req.user
-	const orderItems = req.body;
-	const totalPrice = orderItems.reduce((total, item) => {
+	const orderDetails = req.body;
+	const totalPrice = orderDetails.reduce((total, item) => {
 		return total + item.quantity * item.price;
 	}, 0);
 
@@ -67,7 +67,7 @@ exports.createOrder = async (req, res, next) => {
 	// Substract all today
 	try {
 		session.startTransaction();
-		for (const item of orderItems) {
+		for (const item of orderDetails) {
 			// findOneAndUpdate() is atomic on single document
 			const updatedTodayMenuItem = await TodayMenuItem.findOneAndUpdate(
 				{ bookId: item.bookId, quantity: { $gte: item.quantity } },
@@ -99,7 +99,7 @@ exports.createOrder = async (req, res, next) => {
 
 		// After subtracting all todayMenuItem.quantity, create order
 		order = await Order.create({
-			orderItems,
+			orderDetails,
 			totalPrice,
 			userId,
 			orderStatus: "success",
@@ -122,9 +122,9 @@ exports.createOrder = async (req, res, next) => {
 		throw error;
 	}
 
-	// Populate order.orderItems.bookId
+	// Populate order.orderDetails.bookId
 	await order.populate({
-		path: "orderItems.bookId",
+		path: "orderDetails.bookId",
 		select: "name image",
 		options: { lean: true },
 	});
@@ -207,7 +207,7 @@ exports.updateOrder = async (req, res, next) => {
 			await order.save({ session });
 
 			// 2) Refund todayMenuItem.quantity
-			for (const item of order.orderItems) {
+			for (const item of order.orderDetails) {
 				const refundedTodayMenuItem = await TodayMenuItem.findOneAndUpdate(
 					{ bookId: item.bookId },
 					{ $inc: { quantity: item.quantity } },
@@ -249,9 +249,9 @@ exports.updateOrder = async (req, res, next) => {
 		}
 	}
 
-	// Populate order with orderItems.bookId and userId
+	// Populate order with orderDetails.bookId and userId
 	await order.populate({
-		path: "orderItems.bookId",
+		path: "orderDetails.bookId",
 		select: "name image",
 		options: { lean: true },
 	});

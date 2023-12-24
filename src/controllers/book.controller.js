@@ -16,8 +16,23 @@ exports.setImagePath = (req, res, next) => {
 
 exports.uploadBookImage = CloudinaryBookStorage.upload.single("image");
 
-exports.createBook = ControllerFactory.createOne(Book);
-exports.getAllBooks = ControllerFactory.getAll(Book);
-exports.getBook = ControllerFactory.getOne(Book);
+exports.createBook = ControllerFactory.createOne(Book, {
+	populate: {
+		path: "categoryId",
+		select: "name image",
+	},
+});
+exports.getAllBooks = ControllerFactory.getAll(Book, {
+	populate: {
+		path: "categoryId",
+		select: "name image",
+	},
+});
+exports.getBook = ControllerFactory.getOne(Book, {
+	populate: {
+		path: "categoryId",
+		select: "name image",
+	},
+});
 exports.updateBook = ControllerFactory.updateOne(Book);
 exports.deleteBook = ControllerFactory.deleteOne(Book);
