@@ -5,11 +5,11 @@ const AppError = require("../utils/appError");
 exports.getAllReviews = ControllerFactory.getAll(Review, {
 	populate: [
 		{
-			path: "userId",
+			path: "user",
 			select: "name email",
 		},
 		{
-			path: "bookId",
+			path: "book",
 			select: "name",
 		},
 	],
@@ -19,11 +19,11 @@ exports.getAllReviews = ControllerFactory.getAll(Review, {
 exports.getReview = ControllerFactory.getOne(Review, {
 	populate: [
 		{
-			path: "userId",
+			path: "user",
 			select: "name email",
 		},
 		{
-			path: "bookId",
+			path: "book",
 			select: "name",
 		},
 	],
@@ -32,11 +32,11 @@ exports.getReview = ControllerFactory.getOne(Review, {
 exports.createReview = ControllerFactory.createOne(Review, {
 	populate: [
 		{
-			path: "userId",
+			path: "user",
 			select: "name email",
 		},
 		{
-			path: "bookId",
+			path: "book",
 			select: "name",
 		},
 	],
@@ -45,11 +45,11 @@ exports.createReview = ControllerFactory.createOne(Review, {
 exports.updateReview = ControllerFactory.updateOne(Review, {
 	populate: [
 		{
-			path: "userId",
+			path: "user",
 			select: "name email",
 		},
 		{
-			path: "bookId",
+			path: "book",
 			select: "name",
 		},
 	],
@@ -58,8 +58,8 @@ exports.updateReview = ControllerFactory.updateOne(Review, {
 exports.deleteReview = ControllerFactory.deleteOne(Review);
 
 exports.setBookAndUserOnBody = (req, res, next) => {
-	if (!req.body.bookId) req.body.bookId = req.params?.bookId;
-	if (!req.body.userId) req.body.userId = req.user?.id;
+	if (!req.body.book) req.body.book = req.params?.book;
+	if (!req.body.user) req.body.user = req.user?.id;
 	next();
 };
 
@@ -79,7 +79,7 @@ exports.checkReviewBelongsToUser = async (req, res, next) => {
 		);
 	}
 
-	if (review.userId.toString() !== req.user.id.toString()) {
+	if (review.user.toString() !== req.user.id.toString()) {
 		throw new AppError(
 			403,
 			"FORBIDDEN",

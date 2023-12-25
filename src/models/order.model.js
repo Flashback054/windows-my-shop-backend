@@ -3,7 +3,7 @@ const mongooseLeanVirtuals = require("mongoose-lean-virtuals");
 
 const orderSchema = new mongoose.Schema(
 	{
-		userId: {
+		user: {
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "User",
 			required: [true, "Hãy nhập id người dùng"],
@@ -33,7 +33,7 @@ const orderSchema = new mongoose.Schema(
 		},
 		orderDetails: [
 			{
-				bookId: {
+				book: {
 					type: mongoose.Schema.Types.ObjectId,
 					ref: "Book",
 					required: [true, "Hãy nhập id sản phẩm"],
@@ -54,9 +54,9 @@ const orderSchema = new mongoose.Schema(
 	}
 );
 
-orderSchema.index({ userId: 1 });
+orderSchema.index({ user: 1 });
 orderSchema.index({ orderDate: 1 });
-orderSchema.index({ "orderDetails.bookId": 1 });
+orderSchema.index({ "orderDetails.book": 1 });
 
 orderSchema.pre("save", function (next) {
 	if (this.isNew) {

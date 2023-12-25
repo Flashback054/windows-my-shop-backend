@@ -72,13 +72,13 @@ exports.saleStatistic = async (req, res, next) => {
 	);
 
 	await Book.populate(saleStats, {
-		path: "items.bookId",
+		path: "items.book",
 		select: "name category",
 	});
 
 	saleStats.forEach((stat) => {
 		stat.items.forEach((item) => {
-			if (item.bookId?.category === "food") {
+			if (item.book?.category === "food") {
 				// For "food" items, set and calculate totalPriceLoss
 				item.totalPriceLoss = item.totalPrice - item.soldPrice;
 			} else {

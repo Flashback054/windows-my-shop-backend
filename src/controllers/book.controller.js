@@ -18,19 +18,19 @@ exports.uploadBookImage = CloudinaryBookStorage.upload.single("image");
 
 exports.createBook = ControllerFactory.createOne(Book, {
 	populate: {
-		path: "categoryId",
+		path: "category",
 		select: "name image",
 	},
 });
 exports.getAllBooks = ControllerFactory.getAll(Book, {
 	populate: {
-		path: "categoryId",
+		path: "category",
 		select: "name image",
 	},
 });
 exports.getBook = ControllerFactory.getOne(Book, {
 	populate: {
-		path: "categoryId",
+		path: "category",
 		select: "name image",
 	},
 });

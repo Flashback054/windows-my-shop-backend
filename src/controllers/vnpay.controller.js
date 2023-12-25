@@ -21,7 +21,7 @@ exports.createVNPAYCharge = async (req, res, next) => {
 	let vnpUrl = process.env.vnp_Url;
 	let returnUrl = process.env.vnp_ReturnUrl;
 	let ipnUrl = process.env.vnp_IpnUrl;
-	let orderId = req.body.id;
+	let order = req.body.id;
 	let amount = req.body.amount;
 	// let bankCode = req.body.bankCode;
 	let bankCode = null;
@@ -33,8 +33,8 @@ exports.createVNPAYCharge = async (req, res, next) => {
 	vnp_Params["vnp_TmnCode"] = tmnCode;
 	vnp_Params["vnp_Locale"] = locale;
 	vnp_Params["vnp_CurrCode"] = currCode;
-	vnp_Params["vnp_TxnRef"] = orderId;
-	vnp_Params["vnp_OrderInfo"] = "Thanh toan cho ma GD:" + orderId;
+	vnp_Params["vnp_TxnRef"] = order;
+	vnp_Params["vnp_OrderInfo"] = "Thanh toan cho ma GD:" + order;
 	vnp_Params["vnp_OrderType"] = "other";
 	vnp_Params["vnp_Amount"] = amount * 100;
 	vnp_Params["vnp_ReturnUrl"] = returnUrl;
@@ -63,7 +63,7 @@ exports.vnpayReturn = async (req, res, next) => {
 	let vnp_Params = req.query;
 	let secureHash = vnp_Params["vnp_SecureHash"];
 
-	let orderId = vnp_Params["vnp_TxnRef"];
+	let order = vnp_Params["vnp_TxnRef"];
 	let rspCode = vnp_Params["vnp_ResponseCode"];
 
 	delete vnp_Params["vnp_SecureHash"];
@@ -75,7 +75,7 @@ exports.vnpayReturn = async (req, res, next) => {
 	let hmac = crypto.createHmac("sha512", secretKey);
 	let signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
 
-	const chargeHistory = await ChargeHistory.findById(orderId);
+	const chargeHistory = await ChargeHistory.findById(order);
 
 	let checkOrderId = !!chargeHistory; // Mã đơn hàng "giá trị của vnp_TxnRef" VNPAY phản hồi tồn tại trong CSDL của bạn
 	let checkAmount = chargeHistory.chargeAmount === vnp_Params.vnp_Amount / 100; // Kiểm tra số tiền "giá trị của vnp_Amout/100" trùng khớp với số tiền của đơn hàng trong CSDL của bạn
@@ -111,8 +111,8 @@ exports.vnpayReturn = async (req, res, next) => {
 		chargeHistory.chargeStatus = "success";
 		await chargeHistory.save();
 		// Update user's balance
-		const { userId, chargeAmount } = chargeHistory;
-		await User.findByIdAndUpdate(userId, {
+		const { user, chargeAmount } = chargeHistory;
+		await User.findByIdAndUpdate(user, {
 			$inc: { balance: chargeAmount },
 		});
 

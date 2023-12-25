@@ -46,7 +46,7 @@ const bookSchema = new mongoose.Schema(
 			required: [true, "Hãy nhập số lượng sản phẩm"],
 		},
 		description: String,
-		categoryId: {
+		category: {
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "Category",
 			required: [true, "Hãy nhập id danh mục"],

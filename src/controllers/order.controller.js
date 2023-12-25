@@ -9,11 +9,11 @@ const User = require("../models/user.model");
 exports.getAllOrders = ControllerFactory.getAll(Order, {
 	populate: [
 		{
-			path: "orderDetails.bookId",
+			path: "orderDetails.book",
 			select: "name image",
 		},
 		{
-			path: "userId",
+			path: "user",
 			select: "name email",
 		},
 	],
@@ -22,11 +22,11 @@ exports.getAllOrders = ControllerFactory.getAll(Order, {
 exports.getOrder = ControllerFactory.getOne(Order, {
 	populate: [
 		{
-			path: "orderDetails.bookId",
+			path: "orderDetails.book",
 			select: "name image",
 		},
 		{
-			path: "userId",
+			path: "user",
 			select: "name email",
 		},
 	],
@@ -70,7 +70,7 @@ exports.createOrder = async (req, res, next) => {
 		for (const item of orderDetails) {
 			// findOneAndUpdate() is atomic on single document
 			const updatedTodayMenuItem = await TodayMenuItem.findOneAndUpdate(
-				{ bookId: item.bookId, quantity: { $gte: item.quantity } },
+				{ book: item.book, quantity: { $gte: item.quantity } },
 				{ $inc: { quantity: -item.quantity } },
 				{ new: true, session }
 			);
@@ -107,7 +107,7 @@ exports.createOrder = async (req, res, next) => {
 
 		// Create payment
 		const payment = await Payment.create({
-			orderId: order.id,
+			order: order.id,
 			paymentMethod,
 			paymentStatus: "success",
 			paymentAmount: totalPrice,
@@ -122,15 +122,15 @@ exports.createOrder = async (req, res, next) => {
 		throw error;
 	}
 
-	// Populate order.orderDetails.bookId
+	// Populate order.orderDetails.book
 	await order.populate({
-		path: "orderDetails.bookId",
+		path: "orderDetails.book",
 		select: "name image",
 		options: { lean: true },
 	});
-	if (order.userId) {
+	if (order.user) {
 		await order.populate({
-			path: "userId",
+			path: "user",
 			select: "name email",
 			options: { lean: true },
 		});
@@ -209,7 +209,7 @@ exports.updateOrder = async (req, res, next) => {
 			// 2) Refund todayMenuItem.quantity
 			for (const item of order.orderDetails) {
 				const refundedTodayMenuItem = await TodayMenuItem.findOneAndUpdate(
-					{ bookId: item.bookId },
+					{ book: item.book },
 					{ $inc: { quantity: item.quantity } },
 					{ new: true, runValidators: true, session }
 				);
@@ -218,24 +218,24 @@ exports.updateOrder = async (req, res, next) => {
 					throw new AppError(
 						404,
 						"NOT_FOUND",
-						`Không tìm thấy todaymenuitem với bookId ${item.bookId}`,
+						`Không tìm thấy todaymenuitem với book ${item.book}`,
 						{
-							bookId: item.bookId,
+							book: item.book,
 						}
 					);
 				}
 			}
 
 			// 3) Refund user.balance
-			if (order.userId) {
-				const user = await User.findById(order.userId);
+			if (order.user) {
+				const user = await User.findById(order.user);
 				user.balance += order.totalPrice;
 				await user.save({ session });
 			}
 
 			// 4) Update paymentStatus to "cancelled"
 			const payment = await Payment.findOneAndUpdate(
-				{ orderId: order.id },
+				{ order: order.id },
 				{ paymentStatus: "cancelled" },
 				{ new: true, runValidators: true, session }
 			);
@@ -249,15 +249,15 @@ exports.updateOrder = async (req, res, next) => {
 		}
 	}
 
-	// Populate order with orderDetails.bookId and userId
+	// Populate order with orderDetails.book and user
 	await order.populate({
-		path: "orderDetails.bookId",
+		path: "orderDetails.book",
 		select: "name image",
 		options: { lean: true },
 	});
-	if (order.userId) {
+	if (order.user) {
 		await order.populate({
-			path: "userId",
+			path: "user",
 			select: "name email",
 			options: { lean: true },
 		});
@@ -287,7 +287,7 @@ exports.checkOrderOwnership = async (req, res, next) => {
 		);
 	}
 
-	if (!order.userId || order.userId.toString() !== req.user.id) {
+	if (!order.user || order.user.toString() !== req.user.id) {
 		throw new AppError(
 			403,
 			"FORBIDDEN",

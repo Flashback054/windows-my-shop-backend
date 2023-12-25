@@ -5,18 +5,18 @@ const ControllerFactory = require("./controller.factory");
 exports.getAllPayments = ControllerFactory.getAll(Payment, {
 	allowNestedQueries: ["userId"],
 	populate: {
-		path: "orderId",
+		path: "order",
 		populate: {
-			path: "userId",
+			path: "user",
 			select: "name email",
 		},
 	},
 });
 exports.getPayment = ControllerFactory.getOne(Payment, {
 	populate: {
-		path: "orderId",
+		path: "order",
 		populate: {
-			path: "userId",
+			path: "user",
 			select: "name email",
 		},
 	},

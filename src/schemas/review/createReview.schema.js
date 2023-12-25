@@ -2,7 +2,7 @@ const zod = require("zod");
 const mongoose = require("mongoose");
 
 const reviewSchema = zod.object({
-	userId: zod
+	user: zod
 		.string({
 			message: "Phải có id người dùng",
 		})
@@ -15,7 +15,7 @@ const reviewSchema = zod.object({
 			}
 		})
 		.optional(),
-	bookId: zod
+	book: zod
 		.string({
 			message: "Phải có id sản phẩm",
 		})

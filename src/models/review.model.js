@@ -3,12 +3,12 @@ const Book = require("./book.model");
 const mongooseLeanVirtuals = require("mongoose-lean-virtuals");
 
 const reviewSchema = new mongoose.Schema({
-	userId: {
+	user: {
 		type: mongoose.Schema.Types.ObjectId,
 		ref: "User",
 		required: [true, "Hãy nhập id người dùng"],
 	},
-	bookId: {
+	book: {
 		type: mongoose.Schema.Types.ObjectId,
 		ref: "Book",
 		required: [true, "Hãy nhập id sách"],
@@ -31,7 +31,7 @@ const reviewSchema = new mongoose.Schema({
 	},
 });
 
-reviewSchema.index({ bookId: 1, userId: 1 }, { unique: true });
+reviewSchema.index({ book: 1, user: 1 }, { unique: true });
 
 reviewSchema.pre("save", function (next) {
 	if (!this.isNew) {
@@ -40,14 +40,14 @@ reviewSchema.pre("save", function (next) {
 	next();
 });
 
-reviewSchema.statics.calcAverageRatings = async function (bookId) {
+reviewSchema.statics.calcAverageRatings = async function (book) {
 	const stats = await this.aggregate([
 		{
-			$match: { bookId },
+			$match: { book },
 		},
 		{
 			$group: {
-				_id: "$bookId",
+				_id: "$book",
 				nRating: { $sum: 1 },
 				avgRating: { $avg: "$rating" },
 			},
@@ -55,23 +55,23 @@ reviewSchema.statics.calcAverageRatings = async function (bookId) {
 	]);
 
 	if (stats.length > 0) {
-		await Book.findByIdAndUpdate(bookId, {
+		await Book.findByIdAndUpdate(book, {
 			ratingsAverage: stats[0].avgRating,
 		});
 	} else {
-		await Book.findByIdAndUpdate(bookId, {
+		await Book.findByIdAndUpdate(book, {
 			ratingsAverage: 5,
 		});
 	}
 };
 
 reviewSchema.post("save", async function (doc, next) {
-	await doc.constructor.calcAverageRatings(doc.bookId);
+	await doc.constructor.calcAverageRatings(doc.book);
 	next();
 });
 
 reviewSchema.post(/^findOneAnd/, async function (doc, next) {
-	await doc.constructor.calcAverageRatings(doc.bookId);
+	await doc.constructor.calcAverageRatings(doc.book);
 	next();
 });
 

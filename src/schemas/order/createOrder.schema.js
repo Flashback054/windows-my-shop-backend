@@ -1,7 +1,7 @@
 const zod = require("zod");
 
 const orderItemSchema = zod.object({
-	bookId: zod.string({
+	book: zod.string({
 		required_error: "Mã sản phẩm là bắt buộc",
 	}),
 	quantity: zod

@@ -3,16 +3,15 @@ const mongooseLeanVirtuals = require("mongoose-lean-virtuals");
 
 const paymentSchema = new mongoose.Schema(
 	{
-		orderId: {
+		order: {
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "Order",
 			required: [true, "Hãy nhập id đơn hàng"],
 		},
-		couponId: {
+		coupon: {
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "Coupon",
 		},
-
 		status: {
 			type: String,
 			enum: ["pending", "success", "failed"],
@@ -40,7 +39,7 @@ const paymentSchema = new mongoose.Schema(
 	}
 );
 
-paymentSchema.index({ orderId: 1 });
+paymentSchema.index({ order: 1 });
 paymentSchema.plugin(mongooseLeanVirtuals);
 
 const Payment = mongoose.model("Payment", paymentSchema);
