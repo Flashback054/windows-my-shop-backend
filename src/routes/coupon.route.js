@@ -5,6 +5,8 @@ const { validateRequestId } = require("../middlewares/validateRequest");
 
 const router = express.Router();
 
+router.get("/:id", validateRequestId("id"), couponController.getCoupon);
+
 router.use(authController.protect, authController.restrictTo("admin"));
 
 router.get("/", couponController.getAllCoupons);
@@ -12,7 +14,6 @@ router.post("/", couponController.createCoupon);
 router
 	.route("/:id")
 	.all(validateRequestId("id"))
-	.get(couponController.getCoupon)
 	.patch(couponController.updateCoupon)
 	.delete(couponController.deleteCoupon);
 

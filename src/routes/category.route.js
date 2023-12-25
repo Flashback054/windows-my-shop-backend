@@ -5,8 +5,6 @@ const { validateRequestId } = require("../middlewares/validateRequest");
 
 const router = express.Router();
 
-router.use(authController.protect, authController.restrictTo("admin"));
-
 router.get("/", categoryController.getAllCategories);
 router.post(
 	"/",
@@ -15,10 +13,14 @@ router.post(
 	categoryController.createCategory
 );
 
+router.get("/:id", validateRequestId("id"), categoryController.getCategory);
 router
 	.route("/:id")
-	.all(validateRequestId("id"))
-	.get(categoryController.getCategory)
+	.all(
+		authController.protect,
+		authController.restrictTo("admin"),
+		validateRequestId("id")
+	)
 	.patch(
 		categoryController.uploadCategoryImage,
 		categoryController.setImagePath,
