@@ -309,6 +309,46 @@ async function verifyToken(token, tokenSecret) {
 	}
 }
 
+exports.getNewAccessToken = (req, res, next) => {
+	const { refreshToken } = req.body;
+
+	if (!refreshToken) {
+		throw new AppError(
+			401,
+			"SESSION_EXPIRED",
+			"Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại."
+		);
+	}
+
+	// 2.2) Verify refreshToken
+	try {
+		decoded = verifyToken(refreshToken, process.env.REFRESH_SECRET);
+
+		// If refreshToken is valid, send new accessToken
+		const { accessToken, accessTokenOptions } = createAccessToken(
+			{
+				_id: decoded.id,
+			},
+			req
+		);
+		res.cookie("accessToken", accessToken, accessTokenOptions);
+
+		res.status(200).json({
+			accessToken,
+		});
+	} catch (err) {
+		if (err instanceof jwt.TokenExpiredError) {
+			throw new AppError(
+				401,
+				"SESSION_EXPIRED",
+				"Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại."
+			);
+		} else {
+			throw err;
+		}
+	}
+};
+
 function isChangedPasswordAfter(passwordUpdatedAt, JWTTimestamp) {
 	// Password has been changed after user being created
 	if (passwordUpdatedAt) {

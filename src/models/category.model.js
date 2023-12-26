@@ -8,12 +8,6 @@ const categorySchema = new mongoose.Schema({
 		unique: true,
 	},
 	description: String,
-	image: {
-		type: String,
-	},
-	imagePublicId: {
-		type: String,
-	},
 	createdAt: {
 		type: Date,
 		default: Date.now(),
