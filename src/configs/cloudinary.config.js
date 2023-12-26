@@ -14,7 +14,7 @@ class CloudinaryStorageFactory {
 			cloudinary,
 			params: {
 				folder: `windows-my-shop/${model.modelName}`,
-				allowed_formats: ["jpg", "png"],
+				allowed_formats: ["png", "jpg", "jpeg"],
 				format: "jpg",
 				transformation: [{ width: 900, crop: "fill" }],
 				tags: [model.modelName],

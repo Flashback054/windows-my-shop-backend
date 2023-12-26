@@ -5,6 +5,14 @@ const APIFeatures = require("../utils/apiFeatures");
 exports.createOne = (Model, options) => async (req, res, next) => {
 	try {
 		const newDoc = await Model.create(req.body);
+
+		if (options?.populate) {
+			await newDoc.populate(options.populate);
+		}
+
+		res.status(201).json({
+			data: newDoc,
+		});
 	} catch (err) {
 		// Delete uploaded image
 		if (req.file) {
@@ -17,14 +25,6 @@ exports.createOne = (Model, options) => async (req, res, next) => {
 
 		throw err;
 	}
-
-	if (options?.populate) {
-		await newDoc.populate(options.populate);
-	}
-
-	res.status(201).json({
-		data: newDoc,
-	});
 };
 
 exports.getAll = (Model, options) => async (req, res, next) => {
