@@ -244,13 +244,14 @@ exports.deleteOrder = async (req, res, next) => {
 			);
 
 			// 4) Delete Order
-			await order.remove({ session });
+			await Order.findByIdAndDelete(order.id, { session });
 
 			await session.commitTransaction();
 			session.endSession();
 		} catch (error) {
 			await session.abortTransaction();
 			session.endSession();
+			console.log(error);
 			throw new AppError(
 				500,
 				"INTERNAL_SERVER_ERROR",
