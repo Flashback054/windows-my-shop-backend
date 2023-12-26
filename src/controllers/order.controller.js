@@ -33,13 +33,9 @@ exports.getOrder = ControllerFactory.getOne(Order, {
 });
 exports.createOrder = async (req, res, next) => {
 	// Get user from req.user
-	const orderDetails = req.body;
-	const totalPrice = orderDetails.reduce((total, item) => {
-		return total + item.quantity * item.price;
-	}, 0);
+	const { orderDetails } = req.body;
 
-	const user = req.user;
-	const userId = user.id;
+	const userId = req.body.user || req.user.id;
 	let order;
 	// For each orderDetails, check if orderDetails.quantity <= Book.quantity
 	// Use mongoose Session to rollback if any orderDetails.quantity > Book.quantity
@@ -55,8 +51,6 @@ exports.createOrder = async (req, res, next) => {
 				{ $inc: { quantity: -item.quantity } },
 				{ new: true, session }
 			);
-
-			console.log(updatedBook);
 
 			if (!updatedBook) {
 				throw new AppError(
@@ -102,7 +96,7 @@ exports.createOrder = async (req, res, next) => {
 	});
 };
 exports.updateOrder = async (req, res, next) => {
-	const order = await Order.findById(req.params.id);
+	let order = await Order.findById(req.params.id);
 
 	if (!order) {
 		throw new AppError(
@@ -115,45 +109,44 @@ exports.updateOrder = async (req, res, next) => {
 		);
 	}
 
-	if (order.orderStatus === "cancelled") {
-		throw new AppError(
-			400,
-			"BAD_REQUEST",
-			"Không thể cập nhật order đã bị hủy"
-		);
-	}
+	// if (order.status === "cancelled") {
+	// 	throw new AppError(
+	// 		400,
+	// 		"BAD_REQUEST",
+	// 		"Không thể cập nhật order đã bị hủy"
+	// 	);
+	// }
 
-	if (order.orderStatus === "completed") {
-		throw new AppError(
-			400,
-			"BAD_REQUEST",
-			"Không thể cập nhật order đã hoàn thành"
-		);
-	}
+	// if (order.status === "completed") {
+	// 	throw new AppError(
+	// 		400,
+	// 		"BAD_REQUEST",
+	// 		"Không thể cập nhật order đã hoàn thành"
+	// 	);
+	// }
 
-	const { orderStatus } = req.body;
+	// const { status } = req.body;
 
-	// Check if orderStatus is updated to "preparing" or "completed"
-	if (orderStatus === "paid" || orderStatus === "shipping") {
-		// Only admin  can update orderStatus when it is "paid" or "shipping"
-		// Used to update status from "paid" -> "shipping" -> "completed"
-		if (req.user.role !== "admin") {
-			throw new AppError(
-				403,
-				"FORBIDDEN",
-				"Bạn không có quyền cập nhật trạng thái hoàn thành cho đơn hàng",
-				{
-					orderStatus,
-				}
-			);
-		}
+	// // Check if status is updated to "preparing" or "completed"
+	// if (status === "paid" || status === "shipping") {
+	// 	// Only admin  can update status when it is "paid" or "shipping"
+	// 	// Used to update status from "paid" -> "shipping" -> "completed"
+	// 	if (req.user.role !== "admin") {
+	// 		throw new AppError(
+	// 			403,
+	// 			"FORBIDDEN",
+	// 			"Bạn không có quyền cập nhật trạng thái hoàn thành cho đơn hàng",
+	// 			{
+	// 				status,
+	// 			}
+	// 		);
+	// 	}
 
-		order.orderStatus = orderStatus;
-		await order.save();
-	}
-
-	// Check if orderStatus is updated to "cancelled"
-	if (orderStatus === "cancelled") {
+	// 	order.status = status;
+	// 	await order.save();
+	// }
+	// Check if status is updated to "cancelled"
+	if (req.body.status === "cancelled") {
 		// Start a transaction
 		const session = await mongoose.startSession();
 		session.startTransaction();
@@ -168,13 +161,16 @@ exports.updateOrder = async (req, res, next) => {
 				);
 			}
 
-			// 4) Update paymentStatus to "cancelled"
+			// 4) Update status to "cancelled"
 			const payment = await Payment.findOneAndUpdate(
 				{ order: order.id },
-				{ paymentStatus: "failed", paymentError: "Đơn hàng đã bị huỷ" },
+				{ status: "failed", paymentError: "Đơn hàng đã bị huỷ" },
 				{ new: true, runValidators: true, session }
 			);
 			// TODO: Use VNPAY to refund money to user
+
+			order.status = "cancelled";
+			await order.save();
 
 			await session.commitTransaction();
 			session.endSession();
@@ -187,6 +183,11 @@ exports.updateOrder = async (req, res, next) => {
 				"Có lỗi xảy ra trong quá trình huỷ đơn hàng"
 			);
 		}
+	} else {
+		order = await Order.findByIdAndUpdate(req.params.id, req.body, {
+			new: true,
+			runValidators: true,
+		});
 	}
 
 	// Populate order with orderDetails.book and user
@@ -207,7 +208,61 @@ exports.updateOrder = async (req, res, next) => {
 		data: order,
 	});
 };
-exports.deleteOrder = ControllerFactory.deleteOne(Order);
+exports.deleteOrder = async (req, res, next) => {
+	const order = await Order.findById(req.params.id);
+
+	if (!order) {
+		throw new AppError(
+			404,
+			"NOT_FOUND",
+			`Không tìm thấy order với ID ${req.params.id}`,
+			{
+				id: req.params.id,
+			}
+		);
+	}
+
+	if (order.status !== "cancelled") {
+		// Start a transaction
+		const session = await mongoose.startSession();
+		session.startTransaction();
+
+		try {
+			// 2) Refund Book.quantity
+			for (const item of order.orderDetails) {
+				const refundedBook = await Book.findOneAndUpdate(
+					{ _id: item.book },
+					{ $inc: { quantity: item.quantity } },
+					{ new: true, runValidators: true, session }
+				);
+			}
+
+			// 3) Delete Payment
+			const payment = await Payment.findOneAndDelete(
+				{ order: order.id },
+				{ session }
+			);
+
+			// 4) Delete Order
+			await order.remove({ session });
+
+			await session.commitTransaction();
+			session.endSession();
+		} catch (error) {
+			await session.abortTransaction();
+			session.endSession();
+			throw new AppError(
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Có lỗi xảy ra trong quá trình huỷ đơn hàng"
+			);
+		}
+	}
+
+	res.status(204).json({
+		data: null,
+	});
+};
 
 // Middleware
 exports.checkOrderOwnership = async (req, res, next) => {
@@ -260,7 +315,7 @@ exports.checkOrderStatus = async (req, res, next) => {
 		);
 	}
 
-	if (order.orderStatus === "completed") {
+	if (order.status === "completed") {
 		throw new AppError(
 			403,
 			"FORBIDDEN",
@@ -268,11 +323,11 @@ exports.checkOrderStatus = async (req, res, next) => {
 		);
 	}
 
-	if (order.orderStatus === "cancelled") {
+	if (order.status === "cancelled") {
 		throw new AppError(403, "FORBIDDEN", "Bạn không thể thay đổi order đã hủy");
 	}
 
-	if (order.orderStatus === "shipping") {
+	if (order.status === "shipping") {
 		throw new AppError(
 			403,
 			"FORBIDDEN",
@@ -280,7 +335,7 @@ exports.checkOrderStatus = async (req, res, next) => {
 		);
 	}
 
-	if (order.orderStatus === "paid") {
+	if (order.status === "paid") {
 		throw new AppError(
 			403,
 			"FORBIDDEN",
@@ -310,4 +365,64 @@ exports.checkGetAllOrdersPermission = async (req, res, next) => {
 	}
 
 	next();
+};
+
+exports.payOrder = async (req, res, next) => {
+	const order = await Order.findById(req.params.id);
+
+	if (!order) {
+		throw new AppError(
+			404,
+			"NOT_FOUND",
+			`Không tìm thấy order với ID ${req.params.id}`,
+			{
+				id: req.params.id,
+			}
+		);
+	}
+
+	if (
+		order.status === "completed" ||
+		order.status === "cancelled" ||
+		order.status === "shipping" ||
+		order.status === "paid"
+	) {
+		throw new AppError(
+			403,
+			"FORBIDDEN",
+			"Bạn chỉ có thể thanh toán order đang chờ thanh toán"
+		);
+	}
+
+	const payment = await Payment.create({
+		order: order.id,
+		status: "success",
+		paymentDate: Date.now(),
+		description: `Thanh toán đơn hàng ${order.id}`,
+		totalPrice: order.totalPrice,
+		finalPrice: order.finalPrice,
+	});
+
+	// Update order status to "paid"
+	order.status = "paid";
+	await order.save();
+
+	// Populate order with orderDetails.book and user
+	await order.populate([
+		{
+			path: "orderDetails.book",
+			select: "name image",
+			options: { lean: true },
+		},
+		{
+			path: "user",
+			select: "name email",
+			options: { lean: true },
+		},
+	]);
+
+	// Send response
+	res.status(200).json({
+		data: order,
+	});
 };

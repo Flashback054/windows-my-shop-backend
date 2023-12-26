@@ -34,16 +34,19 @@ router.get(
 
 router
 	.route("/:id")
-	.all(orderController.checkOrderOwnership, orderController.checkOrderStatus)
-	.patch(orderController.updateOrder)
-	.delete(orderController.deleteOrder);
+	.patch(
+		orderController.checkOrderOwnership,
+		orderController.checkOrderStatus,
+		orderController.updateOrder
+	)
+	.delete(orderController.checkOrderOwnership, orderController.deleteOrder);
 
 // A route to pay for an order
 router.post(
 	"/:id/pay",
 	orderController.checkOrderOwnership,
 	orderController.checkOrderStatus,
-	vnpayController.createVNPAYPayment
+	orderController.payOrder
 );
 
 module.exports = router;

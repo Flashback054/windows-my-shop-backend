@@ -58,7 +58,7 @@ orderSchema.index({ user: 1 });
 orderSchema.index({ orderDate: 1 });
 
 orderSchema.pre("save", function (next) {
-	if (this.isNew) {
+	if (this.isNew || this.isModified("orderDetails")) {
 		this.totalPrice = this.orderDetails.reduce(
 			(acc, cur) => acc + cur.price * cur.quantity,
 			0

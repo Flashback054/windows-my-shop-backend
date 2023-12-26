@@ -24,8 +24,11 @@ const orderItemSchema = zod.object({
 });
 
 const createOrderSchema = zod.object({
-	body: zod.array(orderItemSchema).nonempty({
-		message: "Danh sách sản phẩm không được trống",
+	body: zod.object({
+		user: zod.string().optional(),
+		orderDetails: zod.array(orderItemSchema).min(1, {
+			message: "Order phải có ít nhất 1 sản phẩm",
+		}),
 	}),
 });
 
