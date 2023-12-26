@@ -1,6 +1,7 @@
 const express = require("express");
 const orderController = require("../controllers/order.controller");
 const authController = require("../controllers/auth.controller");
+const vnpayController = require("../controllers/vnpay.controller");
 const {
 	validateRequest,
 	validateRequestId,
@@ -11,18 +12,38 @@ const router = express.Router({ mergeParams: true });
 
 router.use(authController.protect);
 
-router.get("/", orderController.getAllOrders);
+router.param("id", validateRequestId("id"));
+router.param("userId", validateRequestId("userId"));
+
+router.get(
+	"/",
+	orderController.checkGetAllOrdersPermission,
+	orderController.getAllOrders
+);
 router.post(
 	"/",
 	validateRequest(createOrderSchema),
 	orderController.createOrder
 );
 
+router.get(
+	"/:id",
+	orderController.checkOrderOwnership,
+	orderController.getOrder
+);
+
 router
 	.route("/:id")
-	.all(validateRequestId("id"), orderController.checkOrderOwnership)
-	.get(orderController.getOrder)
+	.all(orderController.checkOrderOwnership, orderController.checkOrderStatus)
 	.patch(orderController.updateOrder)
 	.delete(orderController.deleteOrder);
+
+// A route to pay for an order
+router.post(
+	"/:id/pay",
+	orderController.checkOrderOwnership,
+	orderController.checkOrderStatus,
+	vnpayController.createVNPAYPayment
+);
 
 module.exports = router;

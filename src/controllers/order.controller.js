@@ -1,10 +1,10 @@
 const Order = require("../models/order.model");
 const ControllerFactory = require("./controller.factory");
-const ApiFeatures = require("../utils/apiFeatures");
 const AppError = require("../utils/appError");
 const mongoose = require("mongoose");
 const Payment = require("../models/payment.model");
 const User = require("../models/user.model");
+const Book = require("../models/book.model");
 
 exports.getAllOrders = ControllerFactory.getAll(Order, {
 	populate: [
@@ -39,79 +39,41 @@ exports.createOrder = async (req, res, next) => {
 	}, 0);
 
 	const user = req.user;
-	let userId, paymentMethod;
-	if (user.role === "admin" || user.role === "cashier") {
-		userId = undefined;
-		paymentMethod = "cash";
-	} else {
-		userId = user.id;
-		paymentMethod = "balance";
-		// Check if user.balance >= totalPrice
-		if (user.balance < totalPrice) {
-			throw new AppError(
-				400,
-				"NOT_ENOUGH_BALANCE",
-				"Số dư của bạn không đủ để thanh toán đơn hàng này",
-				{
-					balance: user.balance,
-					totalPrice,
-				}
-			);
-		}
-	}
-
+	const userId = user.id;
 	let order;
-	// For each orderItem, check if orderItem.quantity <= todayMenuItem.quantity
-	// Use mongoose Session to rollback if any orderItem.quantity > todayMenuItem.quantity
+	// For each orderDetails, check if orderDetails.quantity <= Book.quantity
+	// Use mongoose Session to rollback if any orderDetails.quantity > Book.quantity
 	const session = await mongoose.startSession();
 	// Substract all today
 	try {
 		session.startTransaction();
+
 		for (const item of orderDetails) {
 			// findOneAndUpdate() is atomic on single document
-			const updatedTodayMenuItem = await TodayMenuItem.findOneAndUpdate(
-				{ book: item.book, quantity: { $gte: item.quantity } },
+			const updatedBook = await Book.findOneAndUpdate(
+				{ _id: item.book, quantity: { $gte: item.quantity } },
 				{ $inc: { quantity: -item.quantity } },
 				{ new: true, session }
 			);
 
-			if (!updatedTodayMenuItem) {
+			console.log(updatedBook);
+
+			if (!updatedBook) {
 				throw new AppError(
 					400,
 					"NOT_ENOUGH_QUANTITY",
 					`Số lượng ${item.name} không đủ để đặt hàng`,
 					{
-						quantity: item.quantity,
-						name: item.name,
+						book: `Số lượng ${item.name} không đủ để đặt hàng`,
 					}
 				);
 			}
 		}
 
-		// Subtract user.balance if paymentMethod === "balance"
-		if (paymentMethod === "balance") {
-			await User.findByIdAndUpdate(
-				user.id,
-				{ balance: user.balance - totalPrice },
-				{ new: true, runValidators: true }
-			);
-		}
-
-		// After subtracting all todayMenuItem.quantity, create order
+		// Create order
 		order = await Order.create({
+			user: userId,
 			orderDetails,
-			totalPrice,
-			userId,
-			orderStatus: "success",
-		});
-
-		// Create payment
-		const payment = await Payment.create({
-			order: order.id,
-			paymentMethod,
-			paymentStatus: "success",
-			paymentAmount: totalPrice,
-			discountAmount: 0,
 		});
 
 		await session.commitTransaction();
@@ -122,19 +84,17 @@ exports.createOrder = async (req, res, next) => {
 		throw error;
 	}
 
-	// Populate order.orderDetails.book
-	await order.populate({
-		path: "orderDetails.book",
-		select: "name image",
-		options: { lean: true },
-	});
-	if (order.user) {
-		await order.populate({
+	// Populate order.orderDetails.book and order.user
+	await order.populate([
+		{
+			path: "orderDetails.book",
+			select: "name image",
+		},
+		{
 			path: "user",
 			select: "name email",
-			options: { lean: true },
-		});
-	}
+		},
+	]);
 
 	// Send response
 	res.status(201).json({
@@ -174,13 +134,10 @@ exports.updateOrder = async (req, res, next) => {
 	const { orderStatus } = req.body;
 
 	// Check if orderStatus is updated to "preparing" or "completed"
-	if (orderStatus === "preparing" || orderStatus === "completed") {
-		// Only admin or cashier or staff can update orderStatus to "preparing" or "completed"
-		if (
-			req.user.role !== "admin" &&
-			req.user.role !== "cashier" &&
-			req.user.role !== "staff"
-		) {
+	if (orderStatus === "paid" || orderStatus === "shipping") {
+		// Only admin  can update orderStatus when it is "paid" or "shipping"
+		// Used to update status from "paid" -> "shipping" -> "completed"
+		if (req.user.role !== "admin") {
 			throw new AppError(
 				403,
 				"FORBIDDEN",
@@ -202,50 +159,33 @@ exports.updateOrder = async (req, res, next) => {
 		session.startTransaction();
 
 		try {
-			// 1) Update orderStatus to "cancelled"
-			order.orderStatus = orderStatus;
-			await order.save({ session });
-
-			// 2) Refund todayMenuItem.quantity
+			// 2) Refund Book.quantity
 			for (const item of order.orderDetails) {
-				const refundedTodayMenuItem = await TodayMenuItem.findOneAndUpdate(
-					{ book: item.book },
+				const refundedBook = await Book.findOneAndUpdate(
+					{ _id: item.book },
 					{ $inc: { quantity: item.quantity } },
 					{ new: true, runValidators: true, session }
 				);
-
-				if (!refundedTodayMenuItem) {
-					throw new AppError(
-						404,
-						"NOT_FOUND",
-						`Không tìm thấy todaymenuitem với book ${item.book}`,
-						{
-							book: item.book,
-						}
-					);
-				}
-			}
-
-			// 3) Refund user.balance
-			if (order.user) {
-				const user = await User.findById(order.user);
-				user.balance += order.totalPrice;
-				await user.save({ session });
 			}
 
 			// 4) Update paymentStatus to "cancelled"
 			const payment = await Payment.findOneAndUpdate(
 				{ order: order.id },
-				{ paymentStatus: "cancelled" },
+				{ paymentStatus: "failed", paymentError: "Đơn hàng đã bị huỷ" },
 				{ new: true, runValidators: true, session }
 			);
+			// TODO: Use VNPAY to refund money to user
 
 			await session.commitTransaction();
 			session.endSession();
 		} catch (error) {
 			await session.abortTransaction();
 			session.endSession();
-			throw error;
+			throw new AppError(
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Có lỗi xảy ra trong quá trình huỷ đơn hàng"
+			);
 		}
 	}
 
@@ -271,11 +211,13 @@ exports.deleteOrder = ControllerFactory.deleteOne(Order);
 
 // Middleware
 exports.checkOrderOwnership = async (req, res, next) => {
-	if (req.user.role === "admin" || req.user.role === "cashier") {
+	if (req.user.role === "admin") {
 		return next();
 	}
 
-	const order = await Order.findById(req.params.id);
+	const order =
+		req.order || (await Order.findById(req.params.id).lean({ virtuals: true }));
+
 	if (!order) {
 		throw new AppError(
 			404,
@@ -288,6 +230,78 @@ exports.checkOrderOwnership = async (req, res, next) => {
 	}
 
 	if (!order.user || order.user.toString() !== req.user.id) {
+		throw new AppError(
+			403,
+			"FORBIDDEN",
+			"Bạn không có quyền truy cập vào order của người khác"
+		);
+	}
+
+	req.order = order;
+	next();
+};
+
+exports.checkOrderStatus = async (req, res, next) => {
+	if (req.user.role === "admin") {
+		return next();
+	}
+
+	const order =
+		req.order || (await Order.findById(req.params.id).lean({ virtuals: true }));
+
+	if (!order) {
+		throw new AppError(
+			404,
+			"NOT_FOUND",
+			`Không tìm thấy order với ID ${req.params.id}`,
+			{
+				id: req.params.id,
+			}
+		);
+	}
+
+	if (order.orderStatus === "completed") {
+		throw new AppError(
+			403,
+			"FORBIDDEN",
+			"Bạn không thể thay đổi order đã hoàn thành"
+		);
+	}
+
+	if (order.orderStatus === "cancelled") {
+		throw new AppError(403, "FORBIDDEN", "Bạn không thể thay đổi order đã hủy");
+	}
+
+	if (order.orderStatus === "shipping") {
+		throw new AppError(
+			403,
+			"FORBIDDEN",
+			"Bạn không thể thay đổi order đang giao hàng"
+		);
+	}
+
+	if (order.orderStatus === "paid") {
+		throw new AppError(
+			403,
+			"FORBIDDEN",
+			"Bạn không thể thay đổi order đã thanh toán"
+		);
+	}
+
+	req.order = order;
+	next();
+};
+
+exports.checkGetAllOrdersPermission = async (req, res, next) => {
+	if (req.user.role === "admin") {
+		return next();
+	}
+
+	const userId = req.user.id;
+	if (
+		!req.params.userId ||
+		(req.params.userId && req.params.userId !== userId)
+	) {
 		throw new AppError(
 			403,
 			"FORBIDDEN",

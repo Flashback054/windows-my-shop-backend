@@ -13,20 +13,20 @@ const orderSchema = new mongoose.Schema(
 			default: Date.now(),
 		},
 		// Statuses for order of a book store
-		// 1. pending: order is created but not paid yet
+		// 1. created: order is created
+		// 1. pending: order is being paid
 		// 2. paid: order is paid
 		// 3. shipping: order is shipping
 		// 3. completed: order is completed
 		// 4. canceled: order is canceled
 		status: {
 			type: String,
-			enum: ["pending", "paid", "shipping", "completed", "canceled"],
+			enum: ["pending", "paid", "shipping", "completed", "cancelled"],
 			default: "pending",
 		},
 		description: String,
 		totalPrice: {
 			type: Number,
-			required: [true, "Hãy nhập tổng tiền"],
 		},
 		finalPrice: {
 			type: Number,
@@ -56,7 +56,6 @@ const orderSchema = new mongoose.Schema(
 
 orderSchema.index({ user: 1 });
 orderSchema.index({ orderDate: 1 });
-orderSchema.index({ "orderDetails.book": 1 });
 
 orderSchema.pre("save", function (next) {
 	if (this.isNew) {
@@ -66,6 +65,8 @@ orderSchema.pre("save", function (next) {
 		);
 		this.finalPrice = this.totalPrice;
 	}
+
+	next();
 });
 
 orderSchema.plugin(mongooseLeanVirtuals);

@@ -21,9 +21,6 @@ const orderItemSchema = zod.object({
 		.positive({
 			required_error: "Giá sản phẩm phải là số dương",
 		}),
-	name: zod.string({
-		required_error: "Tên sản phẩm là bắt buộc",
-	}),
 });
 
 const createOrderSchema = zod.object({

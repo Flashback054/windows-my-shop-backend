@@ -84,7 +84,7 @@ exports.getOne = (Model, options) => async (req, res, next) => {
 	const query = Model.findById(req.params.id).lean({ virtuals: true });
 
 	if (options?.populate) {
-		await query.populate(options.populate);
+		query.populate(options.populate);
 	}
 
 	const doc = await query;

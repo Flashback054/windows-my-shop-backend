@@ -3,11 +3,40 @@ let crypto = require("crypto");
 const moment = require("moment");
 
 const User = require("../models/user.model");
-
-const ChargeHistory = require("../models/chargeHistory.model");
+const Book = require("../models/book.model");
+const Order = require("../models/order.model");
 const AppError = require("../utils/appError");
+const Payment = require("../models/payment.model");
 
-exports.createVNPAYCharge = async (req, res, next) => {
+exports.createVNPAYPayment = async (req, res, next) => {
+	// Get order
+	const order =
+		req.order || (await Order.findById(req.params.id).lean({ virtuals: true }));
+
+	let payment = await Payment.findOne({ order: order._id }).lean({
+		virtuals: true,
+	});
+
+	// If payment is not found, create a new one
+	if (!payment) {
+		payment = await Payment.create({
+			order: order._id,
+			paymentDescription: `Thanh toán đơn hàng ${order._id}`,
+			totalPrice: order.totalPrice,
+			finalPrice: order.finalPrice,
+		});
+	}
+
+	// If payment is found and status is success, throw an error
+	if (payment?.status === "success") {
+		throw new AppError(
+			400,
+			"DUPLICATE_TRANSACTION",
+			"Thanh toán cho đơn hàng này đã được thực hiện trước đó."
+		);
+	}
+
+	// If payment is found and statis is either "pending" or "failed", attempt to init a new VNPAY transaction
 	process.env.TZ = "Asia/Ho_Chi_Minh";
 
 	let date = new Date();
@@ -20,9 +49,9 @@ exports.createVNPAYCharge = async (req, res, next) => {
 	let secretKey = process.env.vnp_HashSecret;
 	let vnpUrl = process.env.vnp_Url;
 	let returnUrl = process.env.vnp_ReturnUrl;
-	let ipnUrl = process.env.vnp_IpnUrl;
-	let order = req.body.id;
-	let amount = req.body.amount;
+	// let ipnUrl = process.env.vnp_IpnUrl;
+	let paymentId = payment.id;
+	let amount = payment.finalPrice;
 	// let bankCode = req.body.bankCode;
 	let bankCode = null;
 	let locale = "vn";
@@ -33,8 +62,8 @@ exports.createVNPAYCharge = async (req, res, next) => {
 	vnp_Params["vnp_TmnCode"] = tmnCode;
 	vnp_Params["vnp_Locale"] = locale;
 	vnp_Params["vnp_CurrCode"] = currCode;
-	vnp_Params["vnp_TxnRef"] = order;
-	vnp_Params["vnp_OrderInfo"] = "Thanh toan cho ma GD:" + order;
+	vnp_Params["vnp_TxnRef"] = paymentId;
+	vnp_Params["vnp_OrderInfo"] = "Thanh toan cho ma GD:" + paymentId;
 	vnp_Params["vnp_OrderType"] = "other";
 	vnp_Params["vnp_Amount"] = amount * 100;
 	vnp_Params["vnp_ReturnUrl"] = returnUrl;
@@ -63,7 +92,7 @@ exports.vnpayReturn = async (req, res, next) => {
 	let vnp_Params = req.query;
 	let secureHash = vnp_Params["vnp_SecureHash"];
 
-	let order = vnp_Params["vnp_TxnRef"];
+	let paymentId = vnp_Params["vnp_TxnRef"];
 	let rspCode = vnp_Params["vnp_ResponseCode"];
 
 	delete vnp_Params["vnp_SecureHash"];
@@ -75,10 +104,10 @@ exports.vnpayReturn = async (req, res, next) => {
 	let hmac = crypto.createHmac("sha512", secretKey);
 	let signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
 
-	const chargeHistory = await ChargeHistory.findById(order);
+	const payment = await Payment.findById(paymentId);
 
-	let checkOrderId = !!chargeHistory; // Mã đơn hàng "giá trị của vnp_TxnRef" VNPAY phản hồi tồn tại trong CSDL của bạn
-	let checkAmount = chargeHistory.chargeAmount === vnp_Params.vnp_Amount / 100; // Kiểm tra số tiền "giá trị của vnp_Amout/100" trùng khớp với số tiền của đơn hàng trong CSDL của bạn
+	let checkPaymentId = !!payment; // Mã đơn hàng "giá trị của vnp_TxnRef" VNPAY phản hồi tồn tại trong CSDL của bạn
+	let checkAmount = payment.finalPrice === vnp_Params.vnp_Amount / 100; // Kiểm tra số tiền "giá trị của vnp_Amout/100" trùng khớp với số tiền của đơn hàng trong CSDL của bạn
 
 	// 3 belows conditions are never met if using the exact vnpUrl provided by backend.
 	// Just in case, I still keep them here.
@@ -86,21 +115,21 @@ exports.vnpayReturn = async (req, res, next) => {
 		throw new AppError(400, "INVALID_ARGUMENTS", "Invalid signature");
 	}
 
-	if (!checkOrderId) {
-		throw new AppError(400, "INVALID_ARGUMENTS", "Invalid order ID");
+	if (!checkPaymentId) {
+		throw new AppError(400, "INVALID_ARGUMENTS", "Invalid payment ID");
 	}
 
 	if (!checkAmount) {
 		throw new AppError(400, "INVALID_ARGUMENTS", "Invalid amount");
 	}
 
-	if (chargeHistory.chargeStatus === "success") {
+	if (payment.status === "success") {
 		throw new AppError(
 			400,
 			"DUPLICATE_TRANSACTION",
 			"Thanh toán nạp tiền đã được thực hiện trước đó.",
 			{
-				chargeHistory,
+				payment,
 			}
 		);
 	}
@@ -108,13 +137,16 @@ exports.vnpayReturn = async (req, res, next) => {
 	// Thanh toán thành công
 	if (rspCode === "00") {
 		// Cập nhật trạng thái giao dịch thanh toán thành công vào CSDL của bạn
-		chargeHistory.chargeStatus = "success";
-		await chargeHistory.save();
-		// Update user's balance
-		const { user, chargeAmount } = chargeHistory;
-		await User.findByIdAndUpdate(user, {
-			$inc: { balance: chargeAmount },
-		});
+		payment.status = "success";
+		payment.paymentDate = Date.now();
+		await payment.save();
+
+		// Update order status to "paid"
+		const paidOrder = await Order.findByIdAndUpdate(
+			payment.order,
+			{ status: "paid" },
+			{ new: true }
+		);
 
 		res.status(200).redirect("http://localhost:5173/customer/deposit");
 	} else {
@@ -156,9 +188,9 @@ exports.vnpayReturn = async (req, res, next) => {
 		}
 
 		// Cập nhật trạng thái giao dịch thanh toán thất bại vào CSDL của bạn
-		chargeHistory.chargeStatus = "failed";
-		chargeHistory.chargeError = errMessage;
-		await chargeHistory.save();
+		payment.status = "failed";
+		payment.paymentError = errMessage;
+		await payment.save();
 
 		res.status(200).redirect("http://localhost:5173/customer/deposit");
 	}

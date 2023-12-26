@@ -17,9 +17,9 @@ const paymentSchema = new mongoose.Schema(
 			enum: ["pending", "success", "failed"],
 			default: "pending",
 		},
+		paymentError: String,
 		paymentDate: {
 			type: Date,
-			default: Date.now(),
 		},
 		description: String,
 		totalPrice: {
