@@ -6,8 +6,13 @@ const router = express.Router();
 
 router.use(authController.protect, authController.restrictTo("admin"));
 
-router.get("/import", statisticController.importStatistic);
-router.get("/export", statisticController.exportStatistic);
-router.get("/sale", statisticController.saleStatistic);
+router.get("/count-selling-books", statisticController.countSellingBooks);
+router.get("/count-new-orders", statisticController.countNewOrders);
+router.get("/top-5-low-stock-books", statisticController.getTop5LowStockBooks);
+router.get(
+	"/revenue-and-profit-stats",
+	statisticController.getRevenueAndProfitStats
+);
+router.get("/book-sale-stats", statisticController.getBookSaleStats);
 
 module.exports = router;
