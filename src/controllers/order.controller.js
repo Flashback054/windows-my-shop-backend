@@ -191,18 +191,18 @@ exports.updateOrder = async (req, res, next) => {
 	}
 
 	// Populate order with orderDetails.book and user
-	await order.populate({
-		path: "orderDetails.book",
-		select: "name image",
-		options: { lean: true },
-	});
-	if (order.user) {
-		await order.populate({
+	await order.populate([
+		{
+			path: "orderDetails.book",
+			select: "name image",
+			options: { lean: true },
+		},
+		{
 			path: "user",
 			select: "name email",
 			options: { lean: true },
-		});
-	}
+		},
+	]);
 
 	res.status(200).json({
 		data: order,

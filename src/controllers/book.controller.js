@@ -34,5 +34,10 @@ exports.getBook = ControllerFactory.getOne(Book, {
 		select: "name image",
 	},
 });
-exports.updateBook = ControllerFactory.updateOne(Book);
+exports.updateBook = ControllerFactory.updateOne(Book, {
+	populate: {
+		path: "category",
+		select: "name image",
+	},
+});
 exports.deleteBook = ControllerFactory.deleteOne(Book);
