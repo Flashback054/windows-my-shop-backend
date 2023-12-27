@@ -251,13 +251,14 @@ exports.deleteOrder = async (req, res, next) => {
 		} catch (error) {
 			await session.abortTransaction();
 			session.endSession();
-			console.log(error);
 			throw new AppError(
 				500,
 				"INTERNAL_SERVER_ERROR",
 				"Có lỗi xảy ra trong quá trình huỷ đơn hàng"
 			);
 		}
+	} else {
+		await Order.findByIdAndDelete(order.id);
 	}
 
 	res.status(204).json({
