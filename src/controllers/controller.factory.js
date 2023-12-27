@@ -6,7 +6,7 @@ exports.createOne = (Model, options) => async (req, res, next) => {
 	try {
 		const newDoc = await Model.create(req.body);
 
-		if (options?.populate) {
+		if (options?.populate && newDoc.populate) {
 			await newDoc.populate(options.populate);
 		}
 
