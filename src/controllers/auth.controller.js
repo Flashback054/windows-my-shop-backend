@@ -2,11 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { promisify } = require("util");
 const AppError = require("../utils/appError");
-const {
-	createAccessToken,
-	createRefreshToken,
-	signToken,
-} = require("../utils/generateToken");
+const { createAccessToken, signToken } = require("../utils/generateToken");
 
 const User = require("../models/user.model");
 
@@ -39,14 +35,11 @@ exports.signup = async (req, res, next) => {
 	user.password = undefined;
 
 	const { accessToken, accessTokenOptions } = createAccessToken(user, req);
-	const { refreshToken, refreshTokenOptions } = createRefreshToken(user, req);
 
 	res.cookie("accessToken", accessToken, accessTokenOptions);
-	res.cookie("refreshToken", refreshToken, refreshTokenOptions);
 
 	res.status(201).json({
 		accessToken: accessToken,
-		refreshToken: refreshToken,
 		data: user,
 	});
 };
@@ -65,24 +58,16 @@ exports.login = async (req, res, next) => {
 
 	// 3) If everything ok, send tokens to client
 	const { accessToken, accessTokenOptions } = createAccessToken(user, req);
-	const { refreshToken, refreshTokenOptions } = createRefreshToken(user, req);
 
 	res.cookie("accessToken", accessToken, accessTokenOptions);
-	res.cookie("refreshToken", refreshToken, refreshTokenOptions);
 
 	res.status(200).json({
 		accessToken,
-		refreshToken,
 	});
 };
 
 exports.logout = (req, res, next) => {
 	res.cookie("accessToken", "", {
-		expires: new Date(Date.now()),
-		httpOnly: true,
-	});
-
-	res.cookie("refreshToken", "", {
 		expires: new Date(Date.now()),
 		httpOnly: true,
 	});
@@ -127,21 +112,17 @@ exports.updatePassword = async (req, res, next) => {
 
 	// 4) Log user in, send JWT
 	const { accessToken, accessTokenOptions } = createAccessToken(user, req);
-	const { refreshToken, refreshTokenOptions } = createRefreshToken(user, req);
 
 	res.cookie("accessToken", accessToken, accessTokenOptions);
-	res.cookie("refreshToken", refreshToken, refreshTokenOptions);
 
 	res.status(200).json({
 		accessToken,
-		refreshToken,
 	});
 };
 
 exports.protect = async (req, res, next) => {
 	// 1) Getting tokens
 	let accessToken;
-	let refreshToken;
 	if (
 		req.headers.authorization &&
 		req.headers.authorization.startsWith("Bearer")
@@ -150,10 +131,9 @@ exports.protect = async (req, res, next) => {
 	} else if (req.cookies.accessToken) {
 		accessToken = req.cookies.accessToken;
 	}
-	refreshToken = req.cookies.refreshToken;
 
-	// If there is no accessToken and no refreshToken, throw error
-	if (!accessToken && !refreshToken) {
+	// If there is no accessToken, throw error
+	if (!accessToken) {
 		throw new AppError(
 			401,
 			"SESSION_EXPIRED",
@@ -170,47 +150,21 @@ exports.protect = async (req, res, next) => {
 			decoded = await verifyToken(accessToken, process.env.ACCESS_SECRET);
 		} catch (err) {
 			if (err instanceof jwt.TokenExpiredError) {
-				accessTokenExpired = true;
-			} else {
-				throw err;
-			}
-		}
-	}
-
-	// If accessToken is expired
-	if (!decoded) {
-		if (!refreshToken) {
-			throw new AppError(
-				401,
-				"SESSION_EXPIRED",
-				"Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại."
-			);
-		}
-
-		// 2.2) Verify refreshToken
-		try {
-			decoded = await verifyToken(refreshToken, process.env.REFRESH_SECRET);
-
-			// If refreshToken is valid, send new accessToken
-			const { accessToken, accessTokenOptions } = createAccessToken(
-				{
-					_id: decoded.id,
-				},
-				req
-			);
-			res.cookie("accessToken", accessToken, accessTokenOptions);
-		} catch (err) {
-			if (err instanceof jwt.TokenExpiredError) {
 				throw new AppError(
 					401,
 					"SESSION_EXPIRED",
 					"Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại."
 				);
 			} else {
-				throw err;
+				throw new AppError(
+					401,
+					"INVALID_TOKENS",
+					"Phiên đăng nhập có vấn đề. Vui lòng đăng nhập lại."
+				);
 			}
 		}
 	}
+
 	// Check if decode is undefined
 	if (!decoded) {
 		throw new AppError(
@@ -308,46 +262,6 @@ async function verifyToken(token, tokenSecret) {
 		}
 	}
 }
-
-exports.getNewAccessToken = (req, res, next) => {
-	const { refreshToken } = req.body;
-
-	if (!refreshToken) {
-		throw new AppError(
-			401,
-			"SESSION_EXPIRED",
-			"Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại."
-		);
-	}
-
-	// 2.2) Verify refreshToken
-	try {
-		decoded = verifyToken(refreshToken, process.env.REFRESH_SECRET);
-
-		// If refreshToken is valid, send new accessToken
-		const { accessToken, accessTokenOptions } = createAccessToken(
-			{
-				_id: decoded.id,
-			},
-			req
-		);
-		res.cookie("accessToken", accessToken, accessTokenOptions);
-
-		res.status(200).json({
-			accessToken,
-		});
-	} catch (err) {
-		if (err instanceof jwt.TokenExpiredError) {
-			throw new AppError(
-				401,
-				"SESSION_EXPIRED",
-				"Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại."
-			);
-		} else {
-			throw err;
-		}
-	}
-};
 
 function isChangedPasswordAfter(passwordUpdatedAt, JWTTimestamp) {
 	// Password has been changed after user being created
