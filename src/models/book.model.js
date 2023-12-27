@@ -49,7 +49,8 @@ const bookSchema = new mongoose.Schema(
 		category: {
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "Category",
-			required: [true, "Hãy nhập id danh mục"],
+			// Set default category to 658be841b3eba6ae4c0e382b (id of category "Khác")
+			default: "658be841b3eba6ae4c0e382b",
 		},
 	},
 	{
