@@ -14,5 +14,5 @@ router.get(
 	statisticController.getRevenueAndProfitStats
 );
 router.get("/book-sale-stats", statisticController.getBookSaleStats);
-
+router.get("/count-books", statisticController.countBooks);
 module.exports = router;

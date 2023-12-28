@@ -11,6 +11,14 @@ exports.countSellingBooks = async (req, res, next) => {
 	});
 };
 
+exports.countBooks = async (req, res, next) => {
+	const countBooks = await Book.countDocuments();
+
+	res.status(200).json({
+		data: countBooks,
+	});
+};
+
 exports.countNewOrders = async (req, res, next) => {
 	const { type } = req.query;
 
