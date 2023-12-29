@@ -63,6 +63,7 @@ exports.login = async (req, res, next) => {
 
 	res.status(200).json({
 		accessToken,
+		userId: user._id,
 	});
 };
 
